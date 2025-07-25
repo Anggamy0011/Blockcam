@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "@pinata/sdk": "^2.1.0",
+    "@zxing/browser": "^0.1.5",
+    "antd": "^5.26.5",
+    "axios": "^1.10.0",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^2.7.0",
+    "qrcode.react": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/qrcode.react": "^1.0.5"
+  }
+}
