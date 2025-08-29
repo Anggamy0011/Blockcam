@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import FloatingGuideButton from '../components/FloatingGuideButton';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -115,7 +116,8 @@ const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div style={{ width: '100%', minHeight: '100vh', background: '#fff' }}>
+    <>
+      <div style={{ width: '100%', minHeight: '100vh', background: '#fff' }}>
       {/* Hero Section */}
       <section style={heroStyle}>
         {/* Navigation (logo only) */}
@@ -163,6 +165,53 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
     </div>
+    <FloatingGuideButton 
+      title="Panduan Dashboard BLOCKCAM"
+      content={
+        <div style={{ textAlign: 'left', lineHeight: 1.6 }}>
+          <h3 style={{ marginTop: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
+            🏠 Dashboard BLOCKCAM
+          </h3>
+          <p style={{ marginBottom: 20, color: '#475569' }}>Pusat kontrol untuk semua fitur BLOCKCAM - platform blockchain untuk keamanan rekaman CCTV Anda.</p>
+          
+          <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>🚀 Fitur Utama yang Tersedia:</h4>
+          <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <li style={{ marginBottom: 8 }}><strong>📤 Upload Video:</strong> Upload rekaman CCTV ke IPFS dengan keamanan blockchain Polygon</li>
+              <li style={{ marginBottom: 8 }}><strong>📺 Live View:</strong> Streaming real-time dari kamera RTSP dengan fitur auto-recording</li>
+              <li style={{ marginBottom: 8 }}><strong>📚 Riwayat Upload:</strong> Monitor semua video yang telah diupload beserta status transaksinya</li>
+              <li style={{ marginBottom: 8 }}><strong>✅ Verifikasi Video:</strong> Verifikasi keaslian dan integritas video menggunakan hash IPFS</li>
+            </ul>
+          </div>
+          
+          <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>💡 Langkah Memulai:</h4>
+          <div style={{ background: '#f0f9ff', padding: 16, borderRadius: 8, borderLeft: '4px solid #0ea5e9', marginBottom: 16 }}>
+            <ol style={{ margin: 0, paddingLeft: 20 }}>
+              <li style={{ marginBottom: 8 }}>Pastikan wallet MetaMask terhubung ke jaringan Polygon</li>
+              <li style={{ marginBottom: 8 }}>Pilih <strong>"Upload Video"</strong> untuk mengupload rekaman yang sudah ada</li>
+              <li style={{ marginBottom: 8 }}>Gunakan <strong>"Live View"</strong> untuk streaming dan recording real-time</li>
+              <li style={{ marginBottom: 8 }}>Akses <strong>"Verifikasi"</strong> untuk mengecek keaslian video dengan CID</li>
+              <li style={{ marginBottom: 8 }}>Pantau <strong>"History"</strong> untuk melihat semua aktivitas dan transaksi</li>
+            </ol>
+          </div>
+          
+          <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>🔐 Keamanan & Teknologi:</h4>
+          <div style={{ background: '#f0fdf4', padding: 16, borderRadius: 8, borderLeft: '4px solid #22c55e', marginBottom: 16 }}>
+            <ul style={{ margin: 0, paddingLeft: 20 }}>
+              <li style={{ marginBottom: 6 }}><strong>IPFS Storage:</strong> Penyimpanan terdesentralisasi untuk video</li>
+              <li style={{ marginBottom: 6 }}><strong>Polygon Blockchain:</strong> Pencatatan transaksi yang transparan</li>
+              <li style={{ marginBottom: 6 }}><strong>Smart Contract:</strong> Otomatisasi proses verifikasi</li>
+              <li style={{ marginBottom: 6 }}><strong>Immutable Records:</strong> Data tidak dapat diubah atau dihapus</li>
+            </ul>
+          </div>
+          
+          <div style={{ background: '#fef3c7', padding: 12, borderRadius: 8, borderLeft: '4px solid #f59e0b', marginTop: 16 }}>
+            <strong>💰 Info Biaya:</strong> Setiap transaksi memerlukan gas fee sekitar 45-55 IDR untuk memastikan keamanan dan kecepatan proses di blockchain Polygon.
+          </div>
+        </div>
+      }
+    />
+    </>
   );
 };
 

@@ -1,11 +1,11 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
+// const jwt = require('jsonwebtoken'); // DISABLED for development
 const bcrypt = require('bcryptjs');
 const router = express.Router();
 
 // User storage sementara (bisa diganti ke database/file JSON nanti)
 const users = [];
-const JWT_SECRET = process.env.JWT_SECRET || 'blockcam_secret';
+// const JWT_SECRET = process.env.JWT_SECRET || 'blockcam_secret'; // DISABLED
 
 // Register
 router.post('/register', async (req, res) => {
@@ -33,8 +33,13 @@ router.post('/login', async (req, res) => {
   if (!valid) {
     return res.status(401).json({ error: 'Username atau password salah' });
   }
-  const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1d' });
-  res.json({ token });
+  
+  // Return success without JWT token for development
+  res.json({ success: true, message: 'Login berhasil', username });
+  
+  // Original JWT code (commented out):
+  // const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1d' });
+  // res.json({ token });
 });
 
 module.exports = router; 

@@ -4,6 +4,7 @@ BlockCam adalah sistem manajemen video CCTV berbasis blockchain dan IPFS.
 
 ## Fitur Utama
 - **Dashboard**: Ringkasan dan navigasi utama
+- **Live View**: Streaming video CCTV secara langsung melalui RTSP
 - **Upload**: Upload video ke IPFS dan simpan hash di blockchain
 - **Verifikasi**: Verifikasi keaslian video berdasarkan CID IPFS
 - **History**: Riwayat upload dan transaksi blockchain
@@ -31,8 +32,8 @@ npm start
 ```
 
 ## Catatan
-- Tidak ada fitur live view, RTSP, atau HLS streaming.
-- Semua upload dan verifikasi berbasis file video dan hash IPFS.
+- Fitur Live View CCTV kini tersedia untuk streaming CCTV secara langsung.
+- Semua upload dan verifikasi tetap berbasis file video dan hash IPFS.
 
 ---
 

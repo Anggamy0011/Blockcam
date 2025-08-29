@@ -3,8 +3,14 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
-// Polygon Mainnet Configuration
-const POLYGON_RPC_URL = 'https://polygon-rpc.com';
+// Polygon Mainnet Configuration dengan multiple RPC fallback
+const POLYGON_RPC_URLS = [
+    process.env.POLYGON_RPC || 'https://rpc.ankr.com/polygon',
+    'https://rpc-mainnet.maticvigil.com',
+    'https://polygon-rpc.com',
+    'https://polygon.llamarpc.com',
+    'https://polygon-bor.publicnode.com'
+];
 const POLYGON_CHAIN_ID = 137;
 const POLYGON_EXPLORER = 'https://polygonscan.com';
 
@@ -14,17 +20,56 @@ const CONTRACT_SOURCE = path.join(__dirname, '../contracts/BlockCam.sol');
 
 class PolygonBlockchain {
     constructor() {
-        this.provider = new JsonRpcProvider(POLYGON_RPC_URL);
+        this.provider = null;
         this.contract = null;
         this.contractAddress = null;
-        // Tambahan: signer backend (private key)
-        const backendKey = process.env.BACKEND_PRIVATE_KEY;
-        if (backendKey) {
-            this.signer = new ethers.Wallet(backendKey, this.provider);
-            this.nonceManager = ethers.NonceManager ? new ethers.NonceManager(this.signer) : this.signer;
-        } else {
-            this.signer = null;
-            this.nonceManager = null;
+        this.signer = null;
+        this.nonceManager = null;
+        this.currentRpcIndex = 0;
+        
+        // Try to initialize RPC connection with timeout
+        this.initializeRPC();
+    }
+
+    async initializeRPC() {
+        for (let i = 0; i < POLYGON_RPC_URLS.length; i++) {
+            try {
+                console.log(`🔄 Trying RPC ${i + 1}/${POLYGON_RPC_URLS.length}: ${POLYGON_RPC_URLS[i]}`);
+                this.provider = new JsonRpcProvider(POLYGON_RPC_URLS[i]);
+                
+                // Test connection with timeout
+                const testPromise = this.provider.getBlockNumber();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('RPC timeout')), 5000)
+                );
+                
+                await Promise.race([testPromise, timeoutPromise]);
+                this.currentRpcIndex = i;
+                console.log(`✅ Polygon RPC connected successfully using: ${POLYGON_RPC_URLS[i]}`);
+                
+                // Initialize wallet if private key is available
+                const backendKey = process.env.BACKEND_PRIVATE_KEY;
+                if (backendKey) {
+                    try {
+                        this.signer = new ethers.Wallet(backendKey, this.provider);
+                        this.nonceManager = ethers.NonceManager ? new ethers.NonceManager(this.signer) : this.signer;
+                        console.log('✅ Backend wallet initialized');
+                        break; // Exit loop if successful
+                    } catch (error) {
+                        console.warn('⚠️ Failed to initialize backend wallet:', error.message);
+                    }
+                } else {
+                    console.warn('⚠️ BACKEND_PRIVATE_KEY not set');
+                    break; // Exit loop if no private key
+                }
+            } catch (error) {
+                console.warn(`⚠️ Failed to connect to RPC ${i + 1}:`, error.message);
+                if (i === POLYGON_RPC_URLS.length - 1) {
+                    console.warn('⚠️ All RPC endpoints failed');
+                    console.log('🔄 Backend will run in fallback mode (no blockchain features)');
+                    this.provider = null;
+                }
+            }
         }
     }
 
@@ -138,7 +183,7 @@ class PolygonBlockchain {
         }
         const { abi } = JSON.parse(fs.readFileSync(abiPath, 'utf8'));
         // Gunakan provider publik Polygon
-        const provider = new ethers.JsonRpcProvider('https://polygon-rpc.com');
+        const provider = new ethers.JsonRpcProvider(POLYGON_RPC_URLS[this.currentRpcIndex]);
         this.contractAddress = contractInfo.address;
         this.contract = new ethers.Contract(this.contractAddress, abi, provider);
         console.log('📋 Contract loaded for read-only');
@@ -155,12 +200,59 @@ class PolygonBlockchain {
             }
             const contractWithSigner = this.contract.connect(this.nonceManager);
             console.log('📤 Uploading video metadata to blockchain...');
+            
+            // Dapatkan gas price yang optimal untuk biaya minimal ~50-60 IDR
+            const gasPrice = await this.provider.getFeeData();
+            
+            // Gunakan EIP-1559 gas parameters (maxFeePerGas dan maxPriorityFeePerGas)
+            // Jangan gunakan gasPrice bersamaan dengan maxFeePerGas
+            const txOptions = { 
+                gasLimit: 800000 // Gas limit yang cukup untuk transaksi
+            };
+            
+            // Minimum gas price untuk memastikan biaya minimal 50 rupiah
+            // Asumsi 1 MATIC = 15,000 IDR, maka 50 IDR = 0.00333 MATIC
+            // Untuk gas limit 800,000, minimum gas price = 0.00333 / 800,000 = ~4.16 gwei
+            const minGasPriceGwei = 5; // Minimum 5 gwei untuk memastikan biaya minimal
+            const minGasPrice = ethers.parseUnits(minGasPriceGwei.toString(), 'gwei');
+            
+            // Jika network mendukung EIP-1559, gunakan maxFeePerGas dan maxPriorityFeePerGas
+            if (gasPrice.maxFeePerGas && gasPrice.maxPriorityFeePerGas) {
+                // Gunakan multiplier yang lebih tinggi (2x) untuk memastikan transaksi berhasil
+                let calculatedMaxFeePerGas = gasPrice.maxFeePerGas * 20n / 10n; // 2x lipat
+                let calculatedMaxPriorityFeePerGas = gasPrice.maxPriorityFeePerGas * 20n / 10n; // 2x lipat
+                
+                // Pastikan gas price tidak di bawah minimum
+                if (calculatedMaxFeePerGas < minGasPrice) {
+                    calculatedMaxFeePerGas = minGasPrice;
+                }
+                if (calculatedMaxPriorityFeePerGas < minGasPrice) {
+                    calculatedMaxPriorityFeePerGas = minGasPrice;
+                }
+                
+                txOptions.maxFeePerGas = calculatedMaxFeePerGas;
+                txOptions.maxPriorityFeePerGas = calculatedMaxPriorityFeePerGas;
+                
+                console.log(`💰 Gas Price: maxFeePerGas=${ethers.formatUnits(calculatedMaxFeePerGas, 'gwei')} gwei, maxPriorityFeePerGas=${ethers.formatUnits(calculatedMaxPriorityFeePerGas, 'gwei')} gwei`);
+            } else if (gasPrice.gasPrice) {
+                // Fallback ke legacy gasPrice jika EIP-1559 tidak didukung
+                let calculatedGasPrice = gasPrice.gasPrice * 20n / 10n; // 2x lipat
+                
+                // Pastikan gas price tidak di bawah minimum
+                if (calculatedGasPrice < minGasPrice) {
+                    calculatedGasPrice = minGasPrice;
+                }
+                
+                txOptions.gasPrice = calculatedGasPrice;
+                console.log(`💰 Gas Price: ${ethers.formatUnits(calculatedGasPrice, 'gwei')} gwei`);
+            }
+            
             const tx = await contractWithSigner.uploadVideo(
                 videoHash,
                 title,
                 description,
                 duration,
-                { gasLimit: 700000 }
+                txOptions
             );
             console.log('⏳ Waiting for transaction confirmation...');
             const receipt = await tx.wait();
@@ -181,7 +273,7 @@ class PolygonBlockchain {
     async uploadVideoToBlockchain(ipfsHash, fileSize, metadata) {
         console.log('uploadVideoToBlockchain called with:', { ipfsHash, fileSize, metadata });
         const title = metadata.title || metadata.name || '';
-        const description = metadata.description || '';
+        const description = ''; // Always empty description
         const duration = metadata.duration || 0;
         // Panggil uploadVideoMetadata
         const result = await this.uploadVideoMetadata(ipfsHash, title, description, duration);
@@ -393,33 +485,69 @@ class PolygonBlockchain {
             if (!this.contract) {
                 await this.loadContract();
             }
+            
+            // Optimasi: kurangi range block untuk menghindari timeout
             const currentBlock = await this.provider.getBlockNumber();
-            const fromBlock = Math.max(0, currentBlock - 500); // Optimasi: hanya 500 block terakhir
-            const uploadEvents = await this.contract.queryFilter(
-                this.contract.filters.VideoUploaded(),
-                fromBlock,
-                currentBlock
-            );
+            const fromBlock = Math.max(0, currentBlock - 100); // Kurangi dari 500 ke 100
+            
+            // Tambahkan timeout untuk query
+            const uploadEvents = await Promise.race([
+                this.contract.queryFilter(
+                    this.contract.filters.VideoUploaded(),
+                    fromBlock,
+                    currentBlock
+                ),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Query timeout')), 30000)
+                )
+            ]);
+            
             const userUploads = [];
             for (const event of uploadEvents) {
-                const tx = await event.getTransaction();
-                if (tx.from.toLowerCase() === userAddress.toLowerCase()) {
-                    const block = await event.getBlock();
-                    userUploads.push({
-                        ipfsHash: event.args.videoHash,
-                        title: event.args.title,
-                        description: event.args.description,
-                        duration: event.args.duration.toNumber(),
-                        uploadTime: new Date(block.timestamp * 1000).toISOString(),
-                        txHash: event.transactionHash,
-                        blockNumber: event.blockNumber
-                    });
+                try {
+                    const tx = await event.getTransaction();
+                    if (tx.from.toLowerCase() === userAddress.toLowerCase()) {
+                        const block = await event.getBlock();
+                        
+                        // Perbaiki error toNumber() dengan safe parsing
+                        let duration = 0;
+                        try {
+                            if (event.args.duration && typeof event.args.duration.toNumber === 'function') {
+                                duration = event.args.duration.toNumber();
+                            } else if (event.args.duration) {
+                                duration = parseInt(event.args.duration.toString());
+                            }
+                        } catch (durationError) {
+                            console.warn('⚠️ Failed to parse duration:', durationError.message);
+                            duration = 0;
+                        }
+                        
+                        userUploads.push({
+                            ipfsHash: event.args.videoHash || '',
+                            title: event.args.title || '',
+                            description: event.args.description || '',
+                            duration: duration,
+                            uploadTime: new Date(block.timestamp * 1000).toISOString(),
+                            txHash: event.transactionHash,
+                            blockNumber: event.blockNumber
+                        });
+                    }
+                } catch (eventError) {
+                    console.warn('⚠️ Failed to process event:', eventError.message);
+                    continue; // Skip event yang bermasalah
                 }
             }
+            
             userUploads.sort((a, b) => new Date(b.uploadTime).getTime() - new Date(a.uploadTime).getTime());
             return userUploads;
         } catch (error) {
             console.error('❌ Failed to get user uploads:', error.message);
+            
+            // Return empty array jika timeout atau error
+            if (error.message.includes('timeout') || error.message.includes('network')) {
+                console.warn('⚠️ Network timeout, returning empty array');
+            }
+            
             return [];
         }
     }
@@ -431,6 +559,98 @@ class PolygonBlockchain {
         }
         const contractInfo = JSON.parse(fs.readFileSync(contractInfoPath, 'utf8'));
         return { success: true, data: contractInfo };
+    }
+
+    // Get backend wallet balance
+    async getBackendWalletBalance() {
+        try {
+            if (!this.signer) {
+                console.warn('⚠️ Backend wallet not initialized');
+                return 0;
+            }
+            const balance = await this.provider.getBalance(this.signer.address);
+            return Number(ethers.formatEther(balance));
+        } catch (error) {
+            console.warn('⚠️ Failed to get backend wallet balance:', error.message);
+            return 0;
+        }
+    }
+
+    // Get backend wallet address
+    getBackendWalletAddress() {
+        try {
+            if (!this.signer) {
+                console.warn('⚠️ Backend wallet not initialized');
+                return null;
+            }
+            return this.signer.address;
+        } catch (error) {
+            console.warn('⚠️ Failed to get backend wallet address:', error.message);
+            return null;
+        }
+    }
+
+    // Get gas estimation for upload transaction
+    async getGasEstimation() {
+        try {
+            if (!this.contract) {
+                await this.loadContract();
+            }
+            if (!this.nonceManager) {
+                throw new Error('No signer available. Wallet must be connected.');
+            }
+
+            // Estimasi gas untuk transaksi upload
+            const gasEstimate = await this.contract.uploadVideo.estimateGas(
+                'QmTestHash123456789', // dummy hash untuk estimasi
+                'Test Title',
+                'Test Description',
+                60 // dummy duration
+            );
+
+            // Dapatkan gas price saat ini
+            const feeData = await this.provider.getFeeData();
+            
+            // Minimum gas price untuk memastikan biaya minimal 50 rupiah
+            const minGasPriceGwei = 5; // Minimum 5 gwei
+            const minGasPrice = ethers.parseUnits(minGasPriceGwei.toString(), 'gwei');
+            
+            // Hitung biaya dalam MATIC (1 MATIC = 10^18 wei)
+            const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei');
+            const estimatedCost = gasEstimate * gasPrice;
+            const estimatedCostInMatic = Number(ethers.formatEther(estimatedCost));
+
+            // Biaya dengan gas price 2x lipat untuk memastikan transaksi berhasil (~50-60 IDR)
+            let optimalGasPrice = gasPrice * 20n / 10n; // 2x lipat
+            
+            // Pastikan gas price tidak di bawah minimum
+            if (optimalGasPrice < minGasPrice) {
+                optimalGasPrice = minGasPrice;
+            }
+            
+            const optimalEstimatedCost = gasEstimate * optimalGasPrice;
+            const optimalEstimatedCostInMatic = Number(ethers.formatEther(optimalEstimatedCost));
+
+            return {
+                gasEstimate: gasEstimate.toString(),
+                currentGasPrice: gasPrice.toString(),
+                optimalGasPrice: optimalGasPrice.toString(),
+                minGasPrice: minGasPrice.toString(),
+                estimatedCostInMatic: estimatedCostInMatic.toFixed(6),
+                optimalEstimatedCostInMatic: optimalEstimatedCostInMatic.toFixed(6),
+                estimatedCostInRupiah: (estimatedCostInMatic * 15000).toFixed(0), // Asumsi 1 MATIC = 15,000 IDR
+                optimalEstimatedCostInRupiah: (optimalEstimatedCostInMatic * 15000).toFixed(0),
+                gasPriceInGwei: ethers.formatUnits(gasPrice, 'gwei'),
+                optimalGasPriceInGwei: ethers.formatUnits(optimalGasPrice, 'gwei')
+            };
+        } catch (error) {
+            console.error('❌ Failed to get gas estimation:', error.message);
+            return {
+                error: error.message,
+                estimatedCostInRupiah: '45', // Fallback ke 45 rupiah
+                optimalEstimatedCostInRupiah: '60' // Fallback ke 60 rupiah
+            };
+        }
     }
 }
 

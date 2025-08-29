@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import './index.css'
 import React from 'react';
 import Hls from 'hls.js';
+
 // Hapus import Hls
 
 // Import pages
@@ -14,7 +15,11 @@ import History from './pages/History'
 
 // Import components
 import WalletConnect from './components/WalletConnect'
+import WalletProtection from './components/WalletProtection'
+import FloatingGuideButton from './components/FloatingGuideButton'
 import { WalletProvider } from './contexts/WalletContext';
+import { useWallet } from './hooks/useWallet';
+
 
 // Icon Components
 const HomeIcon = () => (
@@ -54,7 +59,7 @@ const CameraIcon = () => (
   </svg>
 );
 
-function RtspPage() {
+function LiveViewPage() {
   const [rtspUrl, setRtspUrl] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -64,7 +69,7 @@ function RtspPage() {
   const [isRecording, setIsRecording] = React.useState(false);
   const [recLoading, setRecLoading] = React.useState(false);
   const [recError, setRecError] = React.useState('');
-  const [segmentTime] = React.useState(180); // 3 menit, bisa diubah nanti
+  const [segmentTime] = React.useState(60); // 1 menit, bisa diubah nanti
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const hlsRef = React.useRef<Hls | null>(null);
   const [uploadedCount, setUploadedCount] = React.useState(0);
@@ -72,7 +77,7 @@ function RtspPage() {
   const [contractAddress, setContractAddress] = React.useState('');
   const [backendBalance, setBackendBalance] = React.useState(0);
   const [backendAddress, setBackendAddress] = React.useState('');
-  const [progress, setProgress] = React.useState({ uploadStatus: 'idle', txStatus: 'idle', lastFileName: '', lastCid: '', lastTxHash: '', lastTime: '', lastError: '' });
+  const [gasEstimation, setGasEstimation] = React.useState({ estimatedCostInRupiah: '45', optimalEstimatedCostInRupiah: '55' });
 
   // Fetch stats jumlah upload dan transaksi
   React.useEffect(() => {
@@ -116,31 +121,31 @@ function RtspPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Polling progress status
+  // Fetch gas estimation
   React.useEffect(() => {
-    async function fetchProgress() {
+    async function fetchGasEstimation() {
       try {
-        const res = await fetch('http://localhost:4000/blockchain/recording/progress');
+        const res = await fetch('http://localhost:4000/blockchain/gas-estimation');
         const data = await res.json();
-        setProgress(data);
-      } catch {/* ignore */}
+        setGasEstimation(data);
+      } catch {/* ignore error */}
     }
-    fetchProgress();
-    const interval = setInterval(fetchProgress, 2000);
+    fetchGasEstimation();
+    const interval = setInterval(fetchGasEstimation, 30000); // Update setiap 30 detik
     return () => clearInterval(interval);
   }, []);
 
   const handleStart = async () => {
     setError('');
     if (!rtspUrl.trim()) {
-      setError('RTSP URL tidak boleh kosong');
+      setError('URL RTSP tidak boleh kosong');
       return;
     }
     setLoading(true);
     setIsStarting(true);
     setStreamReady(false);
     try {
-      const res = await fetch('http://localhost:4000/blockchain/rtsp/start', {
+      const res = await fetch('http://localhost:4000/blockchain/live-view/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rtspUrl })
@@ -163,7 +168,7 @@ function RtspPage() {
     setLoading(true);
     setError('');
     try {
-      await fetch('http://localhost:4000/blockchain/rtsp/stop', { method: 'POST' });
+      await fetch('http://localhost:4000/blockchain/live-view/stop', { method: 'POST' });
       setIsStreaming(false);
       setStreamReady(false);
       if (hlsRef.current) {
@@ -244,184 +249,350 @@ function RtspPage() {
   }, [streamReady]);
 
   return (
-    <div style={{ maxWidth: 900, margin: '40px auto', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 2px 8px #0001', textAlign: 'center' }}>
-      <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: 24 }}>Live View RTSP</h1>
-      {contractAddress && (
-        <div style={{ marginBottom: 18, fontSize: 15 }}>
-          Smart Contract: <a href={`https://polygonscan.com/address/${contractAddress}`} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'underline', wordBreak: 'break-all' }}>{contractAddress}</a>
-        </div>
-      )}
-      {/* Video Box di paling atas */}
-      <div style={{ position: 'relative', width: '100%', maxWidth: 640, margin: '0 auto 32px auto' }}>
-        {(loading || (!streamReady && isStreaming)) && (
-          <div style={{ width: '100%', aspectRatio: '16/9', background: '#111', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{
-              border: '4px solid #e5e7eb',
-              borderTop: '4px solid #2563eb',
-              borderRadius: '50%',
-              width: 48,
-              height: 48,
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto'
-            }} />
-            <style>{`
-              @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
-            `}</style>
+    <>
+      <WalletProtection>
+      <div style={{ maxWidth: 900, margin: '40px auto', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 2px 8px #0001', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: 24 }}>Live View CCTV</h1>
+        {contractAddress && (
+          <div style={{ marginBottom: 18, fontSize: 15 }}>
+            Smart Contract: <a href={`https://polygonscan.com/address/${contractAddress}`} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'underline', wordBreak: 'break-all' }}>{contractAddress}</a>
           </div>
         )}
-        {streamReady && isStreaming && (
-          <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <video
-              ref={videoRef}
-              controls
-              autoPlay
+        {/* Video Box di paling atas */}
+        <div style={{ position: 'relative', width: '100%', maxWidth: 640, margin: '0 auto 32px auto' }}>
+          {(loading || (!streamReady && isStreaming)) && (
+            <div style={{ width: '100%', aspectRatio: '16/9', background: '#111', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{
+                border: '4px solid #e5e7eb',
+                borderTop: '4px solid #2563eb',
+                borderRadius: '50%',
+                width: 48,
+                height: 48,
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto'
+              }} />
+              <style>{`
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              `}</style>
+            </div>
+          )}
+          {streamReady && isStreaming && (
+            <div style={{ width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: 12, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <video
+                ref={videoRef}
+                controls
+                autoPlay
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  background: '#000',
+                  display: 'block'
+                }}
+              />
+            </div>
+          )}
+        </div>
+        <input
+          type="text"
+          value={rtspUrl}
+          onChange={e => setRtspUrl(e.target.value)}
+          placeholder="rtsp://username:password@ip:port/stream"
+          style={{ width: '100%', padding: 12, borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 16, fontFamily: 'monospace', marginBottom: 8 }}
+          disabled={isStreaming || loading || isStarting || isRecording || recLoading}
+        />
+        {/* Template URL RTSP */}
+        <div style={{ marginBottom: 12, textAlign: 'left' }}>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 6 }}>Template URL RTSP (klik untuk gunakan):</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <button
+              onClick={() => setRtspUrl('rtsp://admin:admin123@192.168.137.84:554/cam/realmonitor?channel=1&subtype=0')}
+              disabled={isStreaming || loading || isStarting || isRecording || recLoading}
               style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                background: '#000',
-                display: 'block'
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 6,
+                padding: '6px 12px',
+                fontSize: 12,
+                fontFamily: 'monospace',
+                color: '#475569',
+                cursor: isStreaming || loading || isStarting || isRecording || recLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                opacity: isStreaming || loading || isStarting || isRecording || recLoading ? 0.5 : 1
               }}
-            />
+              title="Dahua/Hikvision format"
+            >
+              Dahua/Hikvision
+            </button>
+            <button
+              onClick={() => setRtspUrl('rtsp://admin:123456@192.168.1.100:554/h264')}
+              disabled={isStreaming || loading || isStarting || isRecording || recLoading}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 6,
+                padding: '6px 12px',
+                fontSize: 12,
+                fontFamily: 'monospace',
+                color: '#475569',
+                cursor: isStreaming || loading || isStarting || isRecording || recLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                opacity: isStreaming || loading || isStarting || isRecording || recLoading ? 0.5 : 1
+              }}
+              title="Generic RTSP format"
+            >
+              Generic RTSP
+            </button>
+            <button
+              onClick={() => setRtspUrl('rtsp://username:password@ip:port/live/ch0')}
+              disabled={isStreaming || loading || isStarting || isRecording || recLoading}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 6,
+                padding: '6px 12px',
+                fontSize: 12,
+                fontFamily: 'monospace',
+                color: '#475569',
+                cursor: isStreaming || loading || isStarting || isRecording || recLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                opacity: isStreaming || loading || isStarting || isRecording || recLoading ? 0.5 : 1
+              }}
+              title="Alternative format"
+            >
+              Alternative
+            </button>
           </div>
-        )}
+          <div style={{ 
+            background: '#fef2f2', 
+            border: '1px solid #fecaca', 
+            borderRadius: 8, 
+            padding: '8px 12px', 
+            fontSize: 13, 
+            color: '#b91c1c',
+            marginTop: 8 
+          }}>
+            <strong>⚠️ PENTING:</strong> Setelah klik template, wajib ganti IP address (contoh: 192.168.137.84) ke IP kamera Anda yang sebenarnya!
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginBottom: 16 }}>
+          <button onClick={handleStart} disabled={isStreaming || loading || isStarting || isRecording || recLoading} style={{ background: isStreaming || loading || isStarting || isRecording || recLoading ? '#e5e7eb' : '#2563eb', color: isStreaming || loading || isStarting || isRecording || recLoading ? '#888' : '#fff', padding: '12px 28px', borderRadius: 8, fontWeight: 600, fontSize: 16, border: 'none', cursor: isStreaming || loading || isStarting || isRecording || recLoading ? 'not-allowed' : 'pointer' }}>Mulai Live View</button>
+          <button onClick={handleStop} disabled={!isStreaming || loading || isStarting} style={{ background: !isStreaming || loading || isStarting ? '#e5e7eb' : '#dc2626', color: !isStreaming || loading || isStarting ? '#888' : '#fff', padding: '12px 28px', borderRadius: 8, fontWeight: 600, fontSize: 16, border: 'none', cursor: !isStreaming || loading || isStarting ? 'not-allowed' : 'pointer' }}>Stop</button>
+        </div>
+        {loading && <div style={{ color: '#2563eb', marginTop: 12 }}>Menyiapkan live view, tunggu sebentar...</div>}
+        {error && <div style={{ color: '#dc2626', marginTop: 12 }}>{error}</div>}
+        {/* Dua card sejajar */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, justifyContent: 'center', margin: '32px 0 0 0' }}>
+          {/* Card Langganan Polygon */}
+          <div style={{
+            flex: '1 1 320px',
+            minWidth: 280,
+            maxWidth: 400,
+            ...CARD_STYLE,
+            border: backendBalance < 0.5 ? '2px solid #fca5a5' : '1.5px solid #e5e7eb',
+            background: backendBalance < 0.5 ? '#fef2f2' : '#f9fafb',
+            textAlign: 'left',
+          }}>
+            <div style={{
+              background: backendBalance < 0.5 ? '#fca5a5' : '#22c55e',
+              color: backendBalance < 0.5 ? '#b91c1c' : '#fff',
+              padding: '18px 28px 12px 28px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+            }}>
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" fill={backendBalance < 0.5 ? '#f87171' : '#16a34a'} stroke={backendBalance < 0.5 ? '#fff' : '#fff'} strokeWidth="2"/><text x="16" y="21" textAnchor="middle" fontSize="15" fill="#fff" fontWeight="bold">M</text></svg>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>Langganan Otomatis</div>
+                <div style={{ fontSize: 14, fontWeight: 500, opacity: 0.9 }}>
+                  Status: <span style={{ color: '#fff', fontWeight: 700 }}>{backendBalance < 0.5 ? 'Saldo Kurang' : 'Aktif'}</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '20px 28px 28px 28px' }}>
+              <div style={{ fontSize: 14, color: '#64748b', marginBottom: 8 }}>Saldo Wallet Backend:</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#111', marginBottom: 8, letterSpacing: -1 }}>{backendBalance.toFixed(4)} MATIC</div>
+              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16, wordBreak: 'break-all' }}>{backendAddress}</div>
+              {backendBalance < 0.5 && (
+                <div style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 14px', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
+                  Saldo kurang dari 0.5 MATIC. Deposit untuk mengaktifkan fitur rekaman otomatis.
+                </div>
+              )}
+              <div style={{ fontSize: 13, color: '#64748b' }}>
+                Fitur rekaman otomatis akan mengupload video ke IPFS dan blockchain secara otomatis setiap 1 menit.
+              </div>
+              <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0', marginTop: 8 }}>
+                <strong>Biaya per Transaksi:</strong> ~{gasEstimation.optimalEstimatedCostInRupiah} IDR
+                <br />
+                <span style={{ fontSize: 11, opacity: 0.8 }}>(Estimasi dengan gas price optimal untuk keberhasilan)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card Rekaman Otomatis */}
+          <div style={{
+            flex: '1 1 320px',
+            minWidth: 280,
+            maxWidth: 400,
+            ...CARD_STYLE,
+            textAlign: 'left',
+          }}>
+            <div style={{
+              background: isRecording ? '#22c55e' : '#e5e7eb',
+              color: isRecording ? '#fff' : '#888',
+              padding: '18px 28px 12px 28px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+            }}>
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" fill={isRecording ? '#16a34a' : '#e5e7eb'} stroke={isRecording ? '#fff' : '#888'} strokeWidth="2"/><circle cx="16" cy="16" r="7" fill={isRecording ? '#dc2626' : '#888'} /></svg>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>Rekaman Otomatis</div>
+                <div style={{ fontSize: 14, fontWeight: 500, opacity: 0.9 }}>
+                  Status: <span style={{ color: isRecording ? '#fff' : '#888', fontWeight: 700 }}>{isRecording ? 'Aktif' : 'Nonaktif'}</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '20px 28px 28px 28px' }}>
+              <div style={{ fontSize: 14, color: '#64748b', marginBottom: 12 }}>Statistik Rekaman:</div>
+              <div style={{ display: 'flex', gap: 18, marginBottom: 12 }}>
+                <div style={{ background: '#fff', borderRadius: 10, padding: '12px 18px', boxShadow: '0 1px 4px #0001', border: '1px solid #e5e7eb', flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, color: '#2563eb', fontWeight: 600, marginBottom: 2 }}>Upload ke IPFS</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#2563eb', letterSpacing: -1 }}>{uploadedCount}</div>
+                </div>
+                <div style={{ background: '#fff', borderRadius: 10, padding: '12px 18px', boxShadow: '0 1px 4px #0001', border: '1px solid #e5e7eb', flex: 1, textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, color: '#16a34a', fontWeight: 600, marginBottom: 2 }}>Transaksi Blockchain</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a', letterSpacing: -1 }}>{txCount}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                <button onClick={handleStartRecording} disabled={isRecording || recLoading || !isStreaming || backendBalance < 0.5} style={{ background: isRecording || recLoading || !isStreaming || backendBalance < 0.5 ? '#e5e7eb' : '#22c55e', color: isRecording || recLoading || !isStreaming || backendBalance < 0.5 ? '#888' : '#fff', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 15, border: 'none', cursor: isRecording || recLoading || !isStreaming || backendBalance < 0.5 ? 'not-allowed' : 'pointer', boxShadow: '0 1px 4px #0001' }}>Mulai Rekaman</button>
+                <button onClick={handleStopRecording} disabled={!isRecording || recLoading || backendBalance < 0.5} style={{ background: !isRecording || recLoading || backendBalance < 0.5 ? '#e5e7eb' : '#dc2626', color: !isRecording || recLoading || backendBalance < 0.5 ? '#888' : '#fff', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 15, border: 'none', cursor: !isRecording || recLoading || backendBalance < 0.5 ? 'not-allowed' : 'pointer', boxShadow: '0 1px 4px #0001' }}>Stop</button>
+              </div>
+              {backendBalance < 0.5 && (
+                <div style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 14px', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
+                  Saldo Polygon kurang dari 0.5 MATIC. Fitur rekaman otomatis dinonaktifkan.<br />Silakan deposit ke wallet langganan otomatis untuk melanjutkan.
+                </div>
+              )}
+              {recLoading && <div style={{ color: '#2563eb', marginTop: 6 }}>Memproses rekaman...</div>}
+              {recError && <div style={{ color: '#dc2626', marginTop: 6 }}>{recError}</div>}
+              <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>
+                Rekaman akan otomatis diupload ke IPFS dan blockchain setiap 1 menit saat live view aktif.
+              </div>
+              <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                <strong>Biaya Transaksi:</strong> ~{gasEstimation.optimalEstimatedCostInRupiah} IDR per upload
+                <br />
+                <span style={{ fontSize: 11, opacity: 0.8 }}>(Gas price optimal untuk memastikan transaksi berhasil)</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <input
-        type="text"
-        value={rtspUrl}
-        onChange={e => setRtspUrl(e.target.value)}
-        placeholder="rtsp://username:password@ip:port/stream"
-        style={{ width: '100%', padding: 12, borderRadius: 8, border: '1.5px solid #e5e7eb', fontSize: 16, fontFamily: 'monospace', marginBottom: 12 }}
-        disabled={isStreaming || loading || isStarting || isRecording || recLoading}
+    </WalletProtection>
+      <FloatingGuideButton 
+        title="Panduan Live View CCTV BLOCKCAM"
+        content={
+          <div style={{ textAlign: 'left', lineHeight: 1.6 }}>
+            <h3 style={{ marginTop: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
+              🎥 Live Streaming & Auto Recording
+            </h3>
+            <p style={{ marginBottom: 20, color: '#475569' }}>Streaming real-time dari kamera RTSP dengan fitur auto-recording yang otomatis menyimpan ke blockchain.</p>
+            
+            <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>🔌 Setup Koneksi RTSP:</h4>
+            <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 8 }}><strong>Format URL:</strong> <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>rtsp://username:password@ip:port/path</code></li>
+                <li style={{ marginBottom: 8 }}><strong>Template Dahua/Hikvision:</strong> <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>rtsp://admin:admin123@192.168.137.84:554/cam/realmonitor?channel=1&subtype=0</code></li>
+                <li style={{ marginBottom: 8 }}><strong>Template Generic:</strong> <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>rtsp://admin:123456@192.168.1.100:554/h264</code></li>
+                <li style={{ marginBottom: 8 }}><strong>Port Umum:</strong> 554 (default), 8554, 1935</li>
+                <li style={{ marginBottom: 8 }}><strong>Protocol:</strong> H.264, H.265 didukung</li>
+              </ul>
+            </div>
+            
+            <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>📹 Cara Menggunakan:</h4>
+            <div style={{ background: '#f0f9ff', padding: 16, borderRadius: 8, borderLeft: '4px solid #0ea5e9', marginBottom: 16 }}>
+              <ol style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 8 }}>Masukkan URL RTSP manual atau gunakan template (klik tombol Dahua/Hikvision, Generic, dll)</li>
+                <li style={{ marginBottom: 8 }}>Sesuaikan IP address, username, dan password sesuai kamera Anda</li>
+                <li style={{ marginBottom: 8 }}>Klik <strong>"Mulai Stream"</strong> untuk memulai live view</li>
+                <li style={{ marginBottom: 8 }}>Tunggu koneksi terbentuk (5-10 detik)</li>
+                <li style={{ marginBottom: 8 }}>Klik <strong>"Mulai Rekaman"</strong> untuk auto-recording</li>
+                <li style={{ marginBottom: 8 }}>Monitor status upload dan transaksi blockchain</li>
+                <li style={{ marginBottom: 8 }}>Gunakan <strong>"Stop"</strong> untuk menghentikan proses</li>
+              </ol>
+            </div>
+            
+            <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>🔧 Cara Menyesuaikan IP Kamera:</h4>
+            <div style={{ background: '#fff7ed', padding: 16, borderRadius: 8, borderLeft: '4px solid #ea580c', marginBottom: 16 }}>
+              <div style={{ marginBottom: 12 }}>
+                <strong>📍 Langkah Penting - Ganti IP Address:</strong>
+              </div>
+              <ol style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 8 }}>Setelah klik template, <strong>WAJIB ganti IP address</strong> dari contoh ke IP kamera Anda</li>
+                <li style={{ marginBottom: 8 }}>Contoh: Ubah <code style={{ background: '#fed7d7', padding: '2px 4px', borderRadius: 3 }}>192.168.137.84</code> menjadi <code style={{ background: '#d1fae5', padding: '2px 4px', borderRadius: 3 }}>192.168.1.100</code> (IP kamera Anda)</li>
+                <li style={{ marginBottom: 8 }}>Ganti <strong>username</strong> dari <code>admin</code> ke username kamera Anda</li>
+                <li style={{ marginBottom: 8 }}>Ganti <strong>password</strong> dari <code>admin123</code> ke password kamera Anda</li>
+                <li style={{ marginBottom: 8 }}>Pastikan <strong>port</strong> sesuai (biasanya 554, tapi bisa berbeda)</li>
+              </ol>
+              <div style={{ background: '#fef2f2', padding: 10, borderRadius: 6, marginTop: 12, fontSize: 13 }}>
+                <strong>⚠️ Catatan:</strong> Template hanya contoh format URL. IP, username, dan password harus disesuaikan dengan konfigurasi kamera Anda sendiri!
+              </div>
+            </div>
+            
+            <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>📋 Cara Menemukan IP Kamera:</h4>
+            <div style={{ background: '#f1f5f9', padding: 16, borderRadius: 8, borderLeft: '4px solid #64748b', marginBottom: 16 }}>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 6 }}><strong>Software Kamera:</strong> Buka aplikasi bawaan kamera (seperti SmartPSS, iVMS-4200)</li>
+                <li style={{ marginBottom: 6 }}><strong>Router Admin:</strong> Login ke router, cek daftar device yang terhubung</li>
+                <li style={{ marginBottom: 6 }}><strong>IP Scanner:</strong> Gunakan tools seperti Advanced IP Scanner atau Fing</li>
+                <li style={{ marginBottom: 6 }}><strong>DHCP Range:</strong> Biasanya 192.168.1.x atau 192.168.0.x</li>
+              </ul>
+            </div>
+            
+            <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>⚙️ Auto Recording System:</h4>
+            <div style={{ background: '#f0fdf4', padding: 16, borderRadius: 8, borderLeft: '4px solid #22c55e', marginBottom: 16 }}>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 6 }}><strong>Segmen Video:</strong> Configurable (default 1 menit) per file recording</li>
+                <li style={{ marginBottom: 6 }}><strong>Auto Upload:</strong> Langsung ke IPFS setelah recording</li>
+                <li style={{ marginBottom: 6 }}><strong>Blockchain:</strong> Otomatis dicatat di Polygon network</li>
+                <li style={{ marginBottom: 6 }}><strong>Monitoring:</strong> Real-time counter upload & transaksi</li>
+              </ul>
+            </div>
+            
+            <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>💰 Biaya & Persyaratan:</h4>
+            <div style={{ background: '#fef3c7', padding: 16, borderRadius: 8, borderLeft: '4px solid #f59e0b', marginBottom: 16 }}>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 6 }}><strong>Backend Wallet:</strong> Minimal 0.5 MATIC untuk operasional</li>
+                <li style={{ marginBottom: 6 }}><strong>Gas Fee:</strong> ~{gasEstimation?.optimalEstimatedCostInRupiah || '55'} IDR per upload</li>
+                <li style={{ marginBottom: 6 }}><strong>Internet:</strong> Bandwidth stabil minimum 2 Mbps</li>
+                <li style={{ marginBottom: 6 }}><strong>Browser:</strong> Chrome, Firefox, Safari (HLS support)</li>
+              </ul>
+            </div>
+            
+            <h4 style={{ color: '#1e293b', marginTop: 20, marginBottom: 12 }}>📊 Monitoring Dashboard:</h4>
+            <div style={{ background: '#fdf4ff', padding: 16, borderRadius: 8, borderLeft: '4px solid #a855f7', marginBottom: 16 }}>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <li style={{ marginBottom: 6 }}><strong>Uploaded to IPFS:</strong> Counter video yang berhasil diupload</li>
+                <li style={{ marginBottom: 6 }}><strong>Blockchain Transactions:</strong> Total transaksi sukses</li>
+                <li style={{ marginBottom: 6 }}><strong>Backend Balance:</strong> Saldo wallet untuk auto-recording</li>
+                <li style={{ marginBottom: 6 }}><strong>Smart Contract:</strong> Link ke Polygonscan untuk verifikasi</li>
+              </ul>
+            </div>
+            
+            <div style={{ background: '#fef2f2', padding: 12, borderRadius: 8, borderLeft: '4px solid #ef4444', marginTop: 16 }}>
+              <strong>⚠️ Troubleshooting:</strong> Jika stream gagal, periksa: URL RTSP benar, kamera online, firewall tidak memblokir, dan jaringan stabil.
+            </div>
+          </div>
+        }
       />
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginBottom: 16 }}>
-        <button onClick={handleStart} disabled={isStreaming || loading || isStarting || isRecording || recLoading} style={{ background: isStreaming || loading || isStarting || isRecording || recLoading ? '#e5e7eb' : '#2563eb', color: isStreaming || loading || isStarting || isRecording || recLoading ? '#888' : '#fff', padding: '12px 28px', borderRadius: 8, fontWeight: 600, fontSize: 16, border: 'none', cursor: isStreaming || loading || isStarting || isRecording || recLoading ? 'not-allowed' : 'pointer' }}>Mulai Stream</button>
-        <button onClick={handleStop} disabled={!isStreaming || loading || isStarting} style={{ background: !isStreaming || loading || isStarting ? '#e5e7eb' : '#dc2626', color: !isStreaming || loading || isStarting ? '#888' : '#fff', padding: '12px 28px', borderRadius: 8, fontWeight: 600, fontSize: 16, border: 'none', cursor: !isStreaming || loading || isStarting ? 'not-allowed' : 'pointer' }}>Stop</button>
-      </div>
-      {loading && <div style={{ color: '#2563eb', marginTop: 12 }}>Menyiapkan stream, tunggu sebentar...</div>}
-      {error && <div style={{ color: '#dc2626', marginTop: 12 }}>{error}</div>}
-      {/* Dua card sejajar */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32, justifyContent: 'center', margin: '32px 0 0 0' }}>
-        {/* Card Langganan Polygon */}
-        <div style={{
-          flex: '1 1 320px',
-          minWidth: 280,
-          maxWidth: 400,
-          ...CARD_STYLE,
-          border: backendBalance < 0.5 ? '2px solid #fca5a5' : '1.5px solid #e5e7eb',
-          background: backendBalance < 0.5 ? '#fef2f2' : '#f9fafb',
-          textAlign: 'left',
-        }}>
-          <div style={{
-            background: backendBalance < 0.5 ? '#fca5a5' : '#22c55e',
-            color: backendBalance < 0.5 ? '#b91c1c' : '#fff',
-            padding: '18px 28px 12px 28px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-          }}>
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" fill={backendBalance < 0.5 ? '#f87171' : '#16a34a'} stroke={backendBalance < 0.5 ? '#fff' : '#fff'} strokeWidth="2"/><text x="16" y="21" textAnchor="middle" fontSize="15" fill="#fff" fontWeight="bold">M</text></svg>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>Langganan Otomatis</div>
-              <div style={{ fontSize: 14, fontWeight: 500, opacity: 0.9 }}>
-                Status: <span style={{ color: '#fff', fontWeight: 700 }}>{backendBalance < 0.5 ? 'Saldo Kurang' : 'Aktif'}</span>
-              </div>
-            </div>
-          </div>
-          <div style={{ padding: '20px 28px 18px 28px' }}>
-            <div style={{ marginBottom: 10, fontSize: 15 }}>
-              <b>Saldo:</b> {backendBalance.toFixed(4)} MATIC
-            </div>
-            <div style={{ marginBottom: 10, fontSize: 14, color: '#2563eb', wordBreak: 'break-all' }}>
-              <b>Alamat Dompet:</b> {backendAddress ? <a href={`https://polygonscan.com/address/${backendAddress}`} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'underline' }}>{backendAddress}</a> : '-'}
-            </div>
-            <div style={{ color: backendBalance < 0.5 ? '#b91c1c' : '#444', fontSize: 13, marginTop: 8 }}>
-              Untuk menikmati fitur rekaman otomatis dan penyimpanan blockchain, pastikan saldo deposit Anda minimal <b>0.5 MATIC</b>.<br />
-              Saldo ini akan digunakan otomatis untuk membayar biaya layanan selama langganan aktif.
-            </div>
-            {backendBalance < 0.5 && (
-              <div style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 14px', fontSize: 13, marginTop: 12, textAlign: 'center' }}>
-                Saldo Anda kurang dari 0.5 MATIC.<br />
-                Silakan lakukan <b>deposit</b> ke dompet di atas agar fitur rekaman otomatis dapat digunakan kembali.
-              </div>
-            )}
-          </div>
-        </div>
-        {/* Card Rekaman Otomatis */}
-        <div style={{
-          flex: '1 1 320px',
-          minWidth: 280,
-          maxWidth: 400,
-          ...CARD_STYLE,
-          textAlign: 'left',
-        }}>
-          <div style={{
-            background: isRecording ? '#22c55e' : '#e5e7eb',
-            color: isRecording ? '#fff' : '#888',
-            padding: '18px 28px 12px 28px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 14,
-          }}>
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="14" fill={isRecording ? '#16a34a' : '#e5e7eb'} stroke={isRecording ? '#fff' : '#888'} strokeWidth="2"/><circle cx="16" cy="16" r="7" fill={isRecording ? '#dc2626' : '#888'} /></svg>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: -0.5 }}>Rekaman Otomatis</div>
-              <div style={{ fontSize: 14, fontWeight: 500, opacity: 0.9 }}>
-                Status: <span style={{ color: isRecording ? '#fff' : '#888', fontWeight: 700 }}>{isRecording ? 'Aktif' : 'Nonaktif'}</span>
-              </div>
-            </div>
-          </div>
-          <div style={{ padding: '20px 28px 18px 28px' }}>
-            <div style={{ marginBottom: 10 }}>
-              <b>Status Upload:</b> {progress.uploadStatus === 'uploading' && <Spinner />} {progress.uploadStatus === 'uploaded' && 'Upload selesai'} {progress.uploadStatus === 'failed' && <span style={{ color: '#dc2626' }}>Gagal upload</span>}
-              {progress.lastFileName && <div style={{ fontSize: 13, color: '#888' }}>File: {progress.lastFileName}</div>}
-              {progress.lastCid && <div style={{ fontSize: 13, color: '#2563eb' }}>CID: {progress.lastCid}</div>}
-            </div>
-            <div style={{ marginBottom: 10 }}>
-              <b>Status Transaksi:</b> {progress.txStatus === 'pending' && <Spinner />} {progress.txStatus === 'success' && 'Transaksi sukses'} {progress.txStatus === 'failed' && <span style={{ color: '#dc2626' }}>Gagal transaksi</span>}
-              {progress.lastTxHash && <div style={{ fontSize: 13 }}><a href={`https://polygonscan.com/tx/${progress.lastTxHash}`} target="_blank" rel="noopener noreferrer" style={{ color: '#16a34a', textDecoration: 'underline' }}>{progress.lastTxHash.slice(0, 16)}...</a></div>}
-            </div>
-            {progress.lastError && <div style={{ color: '#dc2626', fontSize: 13 }}>{progress.lastError}</div>}
-            <div style={{ marginBottom: 10, fontSize: 15 }}>
-              <b>Durasi segment:</b> {segmentTime} detik
-            </div>
-            <div style={{ display: 'flex', gap: 18, marginBottom: 12 }}>
-              <div style={{ background: '#fff', borderRadius: 10, padding: '12px 18px', boxShadow: '0 1px 4px #0001', border: '1px solid #e5e7eb', flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: 13, color: '#2563eb', fontWeight: 600, marginBottom: 2 }}>Upload ke IPFS</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#2563eb', letterSpacing: -1 }}>{uploadedCount}</div>
-              </div>
-              <div style={{ background: '#fff', borderRadius: 10, padding: '12px 18px', boxShadow: '0 1px 4px #0001', border: '1px solid #e5e7eb', flex: 1, textAlign: 'center' }}>
-                <div style={{ fontSize: 13, color: '#16a34a', fontWeight: 600, marginBottom: 2 }}>Transaksi Blockchain</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a', letterSpacing: -1 }}>{txCount}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-              <button onClick={handleStartRecording} disabled={isRecording || recLoading || !isStreaming || backendBalance < 0.5} style={{ background: isRecording || recLoading || !isStreaming || backendBalance < 0.5 ? '#e5e7eb' : '#22c55e', color: isRecording || recLoading || !isStreaming || backendBalance < 0.5 ? '#888' : '#fff', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 15, border: 'none', cursor: isRecording || recLoading || !isStreaming || backendBalance < 0.5 ? 'not-allowed' : 'pointer', boxShadow: '0 1px 4px #0001' }}>Mulai Rekaman</button>
-              <button onClick={handleStopRecording} disabled={!isRecording || recLoading || backendBalance < 0.5} style={{ background: !isRecording || recLoading || backendBalance < 0.5 ? '#e5e7eb' : '#dc2626', color: !isRecording || recLoading || backendBalance < 0.5 ? '#888' : '#fff', padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 15, border: 'none', cursor: !isRecording || recLoading || backendBalance < 0.5 ? 'not-allowed' : 'pointer', boxShadow: '0 1px 4px #0001' }}>Stop</button>
-            </div>
-            {backendBalance < 0.5 && (
-              <div style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 14px', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
-                Saldo Polygon kurang dari 0.5 MATIC. Fitur rekaman otomatis dinonaktifkan.<br />Silakan deposit ke wallet langganan otomatis untuk melanjutkan.
-              </div>
-            )}
-            {recLoading && <div style={{ color: '#2563eb', marginTop: 6 }}>Memproses rekaman...</div>}
-            {recError && <div style={{ color: '#dc2626', marginTop: 6 }}>{recError}</div>}
-            <div style={{ color: '#444', fontSize: 13, marginTop: 8 }}>
-              <b>Info:</b> Rekaman otomatis akan membagi video tiap <b>{segmentTime} detik</b>.<br />
-              Setiap segmen akan <b>diupload otomatis ke IPFS</b> dan <b>dicatat ke blockchain</b> oleh backend.<br />
-              Maksimal 5 file terakhir disimpan di server, file lama akan dihapus otomatis.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
 
-// Tambahkan di atas komponen RtspPage
+// Tambahkan di atas komponen LiveViewPage
 const CARD_STYLE = {
   borderRadius: 16,
   boxShadow: '0 4px 16px #0001',
@@ -513,10 +684,12 @@ function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [walletAddress, setWalletAddress] = useState<string>('');
+  const { address: currentWalletAddress } = useWallet();
   
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/': return 'Dashboard';
+      case '/live-view': return 'Live View';
       case '/upload': return 'Upload';
       case '/verifikasi': return 'Verifikasi';
       case '/history': return 'History';
@@ -541,6 +714,9 @@ function Layout() {
   useEffect(() => {
     document.title = 'BlockCam';
   }, []);
+
+  // Use current wallet address from context if available
+  const displayAddress = currentWalletAddress || walletAddress;
 
   return (
     <div style={{
@@ -584,10 +760,10 @@ function Layout() {
             onClick={() => navigate('/')} 
           />
           <SidebarButton 
-            label="RTSP" 
+            label="Live View" 
             icon={<CameraIcon />} 
-            isActive={isActive('/rtsp')} 
-            onClick={() => navigate('/rtsp')} 
+            isActive={isActive('/live-view')} 
+            onClick={() => navigate('/live-view')} 
           />
           <SidebarButton 
             label="Upload" 
@@ -643,19 +819,24 @@ function Layout() {
           zIndex: 5,
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center"
+          alignItems: "center",
+          gap: 16
         }}>
-          <span>{getPageTitle()}</span>
-          {walletAddress && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span>{getPageTitle()}</span>
+          
+          </div>
+          {displayAddress && (
             <div style={{
               fontSize: "0.875rem",
               opacity: 0.9,
               fontFamily: "monospace",
               color: "#111"
             }}>
-              Connected: {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+              Connected: {displayAddress.slice(0, 6)}...{displayAddress.slice(-4)}
             </div>
           )}
+          
         </header>
         
         {/* Page Content */}
@@ -667,10 +848,10 @@ function Layout() {
         }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/rtsp" element={<RtspPage />} />
+            <Route path="/live-view" element={<LiveViewPage />} />
             <Route path="/upload" element={<Upload />} />
             <Route path="/verifikasi" element={<Verifikasi />} />
-            <Route path="/history" element={<History />} />
+            <Route path="/history" element={<History walletAddress={displayAddress} />} />
           </Routes>
         </main>
       </div>
@@ -681,15 +862,12 @@ function Layout() {
 function App() {
   return (
     <WalletProvider>
-    <Router>
-      <Layout />
-    </Router>
+        <Router>
+          <Layout />
+        </Router>
+
     </WalletProvider>
   );
 }
 
 export default App
-
-function Spinner() {
-  return <span style={{ display: 'inline-block', width: 18, height: 18, border: '3px solid #e5e7eb', borderTop: '3px solid #2563eb', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: 6, verticalAlign: 'middle' }} />;
-}

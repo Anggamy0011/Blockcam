@@ -73,7 +73,14 @@ app.post('/api/recording/start', (req, res) => {
 
   const args = [
     '-i', rtspUrl,
-    '-c', 'copy',
+    '-c:v', 'libx264',
+    '-b:v', '200k',          // Turunkan bitrate video ke 200 kbps untuk ukuran ~2MB/menit
+    '-maxrate', '250k',      // Maksimal bitrate 250 kbps
+    '-bufsize', '500k',      // Buffer size
+    '-preset', 'fast',       // Preset lebih cepat untuk kompresi lebih agresif
+    '-crf', '28',            // CRF lebih tinggi untuk kompresi lebih kuat (23-28 = good quality)
+    '-c:a', 'aac',
+    '-b:a', '64k',           // Turunkan bitrate audio ke 64 kbps
     '-f', 'segment',
     '-segment_time', String(segmentTime),
     '-reset_timestamps', '1',

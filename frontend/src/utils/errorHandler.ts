@@ -32,6 +32,9 @@ const ERROR_MESSAGES = {
     'gas estimation failed': 'Estimasi gas gagal. Silakan coba lagi.',
     'nonce too low': 'Transaksi gagal. Silakan refresh dan coba lagi.',
     'user rejected': 'Transaksi dibatalkan oleh user.',
+    'video with this hash already exists': 'File video ini sudah ada di sistem. Video dengan konten yang sama tidak dapat diupload lagi.',
+    'already exists': 'File video ini sudah ada di sistem. Video dengan konten yang sama tidak dapat diupload lagi.',
+    'duplicate': 'File video ini sudah ada di sistem. Video dengan konten yang sama tidak dapat diupload lagi.',
     'default': 'Transaksi blockchain gagal. Silakan coba lagi.'
   },
   [ErrorType.IPFS_UPLOAD]: {
